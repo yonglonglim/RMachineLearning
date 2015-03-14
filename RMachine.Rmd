@@ -1,0 +1,77 @@
+---
+title: "Practical Machine Learning"
+author: "yonglonglim"
+date: "Thursday, March 12, 2015"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE)
+```
+## Load the various libraries,read and clean the datasets
+
+```{r}
+library(caret)
+library(ggplot2)
+library(randomForest)
+train <- read.csv("pml-training.csv", na.strings=c("NA" ,"", "#DIV/0!"))
+test <- read.csv("pml-testing.csv", na.strings=c("NA" ,"", "#DIV/0!"))
+summary(train$classe)
+```
+
+We then drop the variables with a lot of NA values, i.e. more than 50% NAs. About 100 variables are dropped due to this. We had to drop the first column as well since the dataset seems to be ordered by activity, hence the first column becomes an overwhelmingly good (but not reproducible) predictor. Dropping it makes the mechanism much better.
+
+```{r}
+train <- train[c(-1)]
+train <- train[colMeans(is.na(train))<0.5]
+```
+
+We then Subset the training dataset further into training and testing.
+
+```{r}
+inTrain <- createDataPartition(y=train$classe,
+                               p=0.7, list=FALSE)
+training <- train[inTrain,]
+testing <- train[-inTrain,]
+```
+
+## Use the random forest predictor
+
+We choose this predictive model since it is likely to be highly accurate as seen from the lecture videos.
+
+```{r}
+modFit <- randomForest(classe~ .,data=training)
+modFit
+```
+
+## Predicting using the subset of the training dataset:
+```{r}
+predict1 <- predict(modFit, testing, type = "class")
+confusionMatrix(predict1, testing$classe)
+```
+
+## Predicting using the actual test dataset:
+So apparently the datasets needs to be in the same format/class in order for it to be used for prediction. I could not figure out how to do it efficiently the proper way, but I found out online that if you bind the datasets, it will conform into the same class. So I "row-binded" the test dataset with one row of the train dataset, and remove the train dataset afterwards.
+```{r}
+test <- test[colMeans(is.na(test))<0.5]
+test <- test[colnames(train[, -59])]
+test <- rbind(train[2,-59], test)
+test <- test[-1,]
+
+predict2 <- predict(modFit, test, type ="class")
+``` 
+  
+Given the close to 100% prediction that both the within training set and test set, this author predicts the out of sample error to be very low and estimates the error appropriately zero with cross-validation.
+
+# Generate submission files
+```{r, eval=FALSE}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predict2)
+
+```
